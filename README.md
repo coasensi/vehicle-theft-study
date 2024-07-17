@@ -1,5 +1,7 @@
 This statistical study focuses on vehicle theft in France between 2016 and 2022.
 
+It was conducted using R Studio software and R programming language.
+
 Correlation with several socio-economic variables were tested:
 
 - Number of police officers per 1000 inhabitants, 2019 (source: https://www.insee.fr/fr/statistiques/5763601?sommaire=5763633)
