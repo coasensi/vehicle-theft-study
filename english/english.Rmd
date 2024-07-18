@@ -1,0 +1,549 @@
+---
+title: "Projet Final"
+author: "Marc MESSANT, Charles ODEND'HAL"
+date: "08 décembre 2023"
+output:
+  pdf_document:
+    fig_caption: yes
+    number_sections: no
+  word_document: default
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = TRUE, comment = NA)
+tinytex::install_tinytex(force = TRUE)
+```
+
+```{=tex}
+\leavevmode\newline
+\leavevmode\newline
+\leavevmode\newline
+```
+> *"Nous déclarons sur l'honneur que ce mémoire a été écrit de notre main, sans aide extérieure non autorisée, qu'il n'a pas été présenté auparavant pour évaluation et qu'il n'a jamais été publié, dans sa totalité ou en partie.*
+
+> *Toutes parties, groupes de mots ou idées, aussi limités soient-ils, y compris des tableaux, graphiques, cartes etc. qui sont empruntés ou qui font référence à d'autres sources bibliographiques sont présentés comme tels, sans exception aucune."*
+
+\leavevmode\newline
+
+```         
+                                                              Signature
+                                                    Marc MESSANT, Charles ODEND'HAL
+```
+
+```{=tex}
+\newpage 
+\tableofcontents
+\newpage
+```
+# **Introduction**
+
+\leavevmode\newline
+
+Vehicle theft is a major social issue in France, with direct implications for citizen safety and growing concerns.
+Understanding the factors influencing the frequency of these crimes is crucial for developing effective prevention strategies and implementing appropriate public security measures.
+
+Territorial analysis is a central aspect of our approach, aimed at identifying departmental trends in vehicle theft.
+This method will provide specific information for each department, offering a detailed view of the geographical situation of this crime.
+
+\newpage
+
+# 1. **Project Presentation**
+
+Our study project aims to explore the correlation between vehicle thefts recorded in different departments of France and several socio-economic variables, such as the number of police officers in each department or the average income of a resident living in that department.
+
+Including the number of police officers per department in our analysis aims to determine the impact of police presence on the frequency of vehicle thefts.
+These results could provide valuable insights into the effectiveness of law enforcement and guide policymakers towards necessary adjustments in the allocation of public security resources.
+One might expect that a higher number of police officers would correspond to a lower number of vehicle thefts.
+
+Our project draws from four databases:
+
+1.  Departmental statistical database of crime recorded by the police and the national gendarmerie between 2016 and 2022: <https://www.data.gouv.fr/fr/datasets/bases-statistiques-communale-et-departementale-de-la-delinquance-enregistree-par-la-police-et-la-gendarmerie-nationales/>
+
+2.  Departmental number of police officers and gendarmes per 10,000 inhabitants in 2019: <https://www.insee.fr/fr/statistiques/5763601?sommaire=5763633>
+
+3.  Departmental unemployment rate by quarter between 2016 and 2022: <https://www.insee.fr/fr/statistiques/2012804>
+
+4.  Average annual net departmental salary income in 2019: <https://www.insee.fr/fr/statistiques/2012748>
+
+From these different databases, we extracted relevant data for our study (one sheet from each of the four files) and combined them into a single Excel file named Base.xlsx.
+
+The initial processing of this base allowed us to manipulate the data for the study.
+
+# 2. **Data Description**
+
+The population comprises all the departments of France from 2016 to 2022.
+There are 100 departments (excluding Mayotte due to insufficient data).
+The accessible databases on the internet allowed us to collect average income and number of police officers data only for the year 2019.
+The observations in our study will be conducted accordingly.
+
+The variables in our study are as follows:
+
+-   **Number of vehicle thefts per thousand inhabitants**: Continuous quantitative variable.
+
+-   **Number of police officers per thousand inhabitants (only in 2019)**: Discrete quantitative variable.
+
+-   **Average income of a resident (only in 2019)**: Continuous quantitative variable.
+
+-   **Unemployment rate**: Discrete quantitative variable.
+
+-   **Unemployment rate grouped into classes**: Discrete qualitative variable.
+
+*Cleaning the environment*
+
+```{r project 1}
+rm(list=ls())
+```
+
+*Set the number of decimal places*
+
+```{r project 2}
+options(digits=3)
+```
+
+*Set working directory and load required library*
+
+```{r project 3}
+setwd("C:/Users/odend/OneDrive/Desktop/Dauphine/L3/S1/Statistiques/PROJET FINAL")
+library(readxl)
+```
+
+*Processing the dataset for all crimes to keep only vehicle thefts (excluding the last row: Mayotte 976)*
+
+```{r project 4}
+Vols <- read_excel("Base.xlsx",sheet="Vols de véhicules",range="A5658:K6364", col_names = FALSE)
+Vols <- as.data.frame(Vols)
+Vols <- subset(Vols, select = -c(1,4,5,6,7))
+colnames(Vols) <- c("Année", "Code département", "Faits","POP", "LOG",
+                     "Taux pour mille habitants")
+Vols <- subset(Vols, `Code département` != 976)
+anyNA(Vols)
+View(Vols)
+```
+
+*Creating a subset for the number of vehicle thefts in 2019*
+
+```{r project 5}
+Vols19<-subset(Vols,Année=="19")
+View(Vols19)
+```
+
+*Processing the dataset for average income per inhabitant (removing rows not relevant to this study: France métropolitaine hors Île-de-France - 97, France métropolitaine - 98, and France hors Mayotte - 103)*
+
+```{r project 6}
+Revenus <- read_excel("Base - revenus.xlsx", range="A5:C107", col_names = FALSE)
+Revenus <- as.data.frame(Revenus)
+Revenus <- Revenus[-c(97, 98, 103), ]
+anyNA(Revenus)
+colnames(Revenus) <- c("Code département", "Département", "Revenu moyen en euros")
+View(Revenus)
+```
+
+*Processing the dataset for the number of police officers (excluding the last row: Mayotte 976)*
+
+```{r project 7}
+Policiers <- read_excel("Base.xlsx", sheet="Policiers", range="A3:C103", col_names = FALSE)
+Policiers <- as.data.frame(Policiers)
+Policiers <- Policiers[-nrow(Policiers), ]
+anyNA(Policiers)
+colnames(Policiers) <- c("Code département", "Département", 
+                     "Nombre de policiers pour 10000 habitants")
+View(Policiers)
+```
+
+*Processing the unemployment rate dataset: averaging quarterly data to obtain annual data, formatting all years in a single column*
+
+```{r project 8}
+#Traitement de la base du taux de chômage ----
+Chomage <- read_excel("Base.xlsx", sheet = "Taux chômage", range="A5:FJ104", col_names = FALSE)
+Chomage <- as.data.frame(Chomage)
+Chomage <- subset(Chomage, select = -c(3:138))
+mat <- matrix(nrow = 100, ncol = 28)
+mat <- subset(Chomage, select = -c(1,2))
+nouv_mat<- matrix(nrow = 100, ncol = 7)
+for (i in 1:100) {
+  k=1
+  for (j in 1:7) {
+    nouv_mat[i,j] <- (mat[i,k]+mat[i,k+1]+mat[i,k+2]+mat[i,k+3])/4
+    k=k+4
+  }}
+Chomage <- subset(Chomage, select = c(1,2))
+Chomage <- cbind(Chomage,nouv_mat)
+colnames(Chomage) <- c("Code département", "Département","2016","2017", 
+                       "2018","2019","2020","2021", "2022")
+library(tidyr)
+Chomage <- gather(Chomage, key = "Année", value = "Taux de chômage", -c(1, 2))
+anyNA(Chomage)
+View(Chomage)
+```
+
+For each variable in our study, we will create:
+
+-   Frequency tables
+
+-   Proportion tables
+
+-   Empirical distribution graphs
+
+## 2.1. **Number of vehicle thefts per thousand inhabitants**
+
+```{r project 9}
+TxVols_bornes<-seq(0.2,6.2,0.6)
+TauxVols<-Vols$`Taux pour mille habitants`
+Volscut<-cut(TauxVols,TxVols_bornes)
+tab <- table(Volscut)
+knitr::kable(t(tab),"simple", caption="Tableau de fréquence du taux pour mille habitants (en classe)", align="c")
+```
+
+```{r project 10}
+tab <- prop.table(table(Volscut))
+knitr::kable(t(tab), caption="Tableau de proportion du taux pour mille habitants (en classe)", align= "c") 
+```
+
+```{r project 11}
+plot(prop.table(table(txVols)), main="Distribution du taux pour mille habitants (en classe)",
+     xlab="Taux pour mille", ylab="Fréquence")
+```
+
+## 2.2. Unemployment Rate
+
+```{r project 12}
+TxChom_seq<-seq(4,24,3)
+TxChom_cut<-cut(Chomage$`Taux de chômage`,TxChom_seq)
+tab <- table(TxChom_cut)
+knitr::kable(t(tab),"simple", caption="Tableau de fréquence du taux de chômage", align="c")
+```
+
+```{r project 13}
+tab <- prop.table(table(TxChom_cut))
+knitr::kable(t(tab), caption="Tableau de proportion du taux de chômage", align= "c")
+```
+
+```{r project 14}
+plot(prop.table(table(txChom)), main="Distribution du taux de chômage",
+     xlab="Taux de chômage", ylab="Fréquence")
+```
+
+## 2.3. Mean Revenue
+
+```{r project 15}
+limites_classes <- c(10000, 20000, 30000, 40000)
+classes <- cut(Revenus$`Revenu moyen en euros`, breaks = limites_classes, include.lowest = TRUE)
+table_classes <- table(classes)
+knitr::kable(t(table_classes),"simple", caption="Tableau de fréquence des revenus moyens", align="c")
+```
+
+```{r project 16}
+hist(Revenus$`Revenu moyen en euros`, main='Distribution des revenus moyens',
+     xlab="Revenu moyen", ylab="Fréquence",
+       breaks = c(20))
+```
+
+## 2.4.  **Number of police officers per thousand inhabitants**
+
+```{r project 17}
+limites_classes <- c(10, 25, 40, 55, 70, 120)
+classes <- cut(Policiers$`Nombre de policiers pour 10000 habitants`, breaks = limites_classes, include.lowest = TRUE)
+table_classes <- table(classes)
+knitr::kable(t(table_classes),"simple", caption="Tableau de fréquence des revenus moyens", align="c")
+```
+
+```{r project 18}
+hist(Policiers$`Nombre de policiers pour 10000 habitants`, main='Distribution du nombre de policiers pour 10000 habitants',
+     xlab="Nombre de policiers", ylab="Fréquence",
+       breaks = c(20))
+```
+
+\newpage
+
+# 3. Point Estimation and Confidence Interval
+
+We begin by drawing a sample of 200 individuals from our database.
+We assign the variable `échantillon_vols` the theft rates associated with the values in the sample.
+
+## 3.1. Drawing a sample of 200 individuals from the population
+
+```{r project 19}
+n <- 200
+N<-nrow(Vols)
+tirages <- sample(1:N, n, replace=TRUE)
+echantillon_vols <- Vols$`Taux pour mille habitants`[tirages]
+```
+
+## 3.2.1. Point Estimation of the empiric mean of the departemental vehicle theft rate for 1000 houses (2016-2022)
+
+```{r project 20}
+moyenne_empirique<-mean(echantillon_vols)
+```
+
+The empiric mean of the sample is 1.662.
+
+## 3.2.2. Point Estimation of the Corrected Empirical Variance of the Departmental Rate of Vehicle Thefts per 1000 houses (2016-2022)
+
+```{r project 70}
+variance_empirique_corrigée<-var(echantillon_vols)
+```
+
+## 3.3. 90% Confidence Interval for Theoric Mean
+
+In this case, we have n=200\>30.
+We use the quantiles of the normal distribution to construct our interval.
+
+```{r project 21}
+borne_inf90<-moyenne_empirique-qnorm(0.95)*sd(echantillon_vols)/sqrt(n)
+borne_sup90<-moyenne_empirique+qnorm(0.95)*sd(echantillon_vols)/sqrt(n)
+
+paste(c("Un intervalle de confiance à 90% est [", borne_inf90, " ; ", borne_sup90, "]"),
+       collapse = "")
+```
+
+We are 90% confident that the sample theoric mean is in this interval.
+
+\newpage
+
+## 3.4. 95% Confidence Interval for the Vehicle Theft Rate Theoric Mean
+
+```{r project 72}
+borne_inf95<-moyenne_empirique-qnorm(0.975)*sd(echantillon_vols)/sqrt(n)
+borne_sup95<-moyenne_empirique+qnorm(0.975)*sd(echantillon_vols)/sqrt(n)
+
+paste(c("Un intervalle de confiance à 95% est [", borne_inf95, " ; ", borne_sup95, "]"),
+       collapse = "")
+```
+
+By increasing the confidence level to 95%, we obtain a wider interval.
+We are more confident (here at 95%) that the theoretical population mean lies within this interval.
+
+\newpage
+
+# 4. Conformity Test
+
+Based on our observations of the empirical mean, we decided to conduct a conformity test on the larger sample we have.
+We perform a one-sided right test (unknown standard deviation) using the empirical mean of the departmental theft rate per 1000 inhabitants as the test statistic across the entire database we have, which includes 700 individuals.
+
+We want to test the value of the empirical mean obtained previously during the point estimation.
+This value was approximately 1.662.
+
+Under H0, the value of the mean is therefore 1.662.
+
+\newline
+
+$$\left\{\begin{array}{c}
+H_0: m = 1.662 \\
+H_1: m \neq 1.662 \end{array}
+\right.$$
+
+```{r project 23}
+x<-Vols$"Taux pour mille habitants"
+t.test(x, mu = 1.662, alternative = "two.sided")
+```
+
+![](images/rmd2.png){width="346"}")
+
+\newline
+
+The critical probability value of the test is 0.97.
+This value is higher than the usual thresholds of 5% and 10%.
+Given this result, we do not reject H0 at the 5% and 10% thresholds.
+\newline Based on this conformity test, the estimation of the empirical mean of 1.662 is very good.
+
+# 5. **Comparison test**
+
+We aim to study the relationship between the number of police officers per department and the departmental vehicle theft rate for the year 2019.
+
+## 5.1. Obtaining 2 data series
+
+We begin by creating a new database (BaseA).
+This database corresponds to the vehicle thefts in 2019 (Vols19), including the theft rates for the year 2019, to which we add the number of police officers per department, also for the year 2019.
+
+```{r project 24}
+BaseA<-cbind(Vols19, "Nombre de policiers pour 10000 habitants" =Policiers$`Nombre de policiers pour 10000 habitants`)
+View(BaseA)
+```
+
+We then create 2 different datasets to isolate the data series.
+BaseB contains the data from BaseA ordered by the number of police officers in descending order.
+
+```{r project 25}
+BaseB<-BaseA[order(-BaseA$`Taux pour mille habitants`),]
+View(BaseB)
+```
+
+Next, we store in the variable `top30` the theft rate values corresponding to the 30 departments with the highest number of police officers per 10,000 inhabitants.
+
+```{r project 25b}
+top30 <-BaseB[1:30,7]
+```
+
+Conversely, we create BaseC, which sorts the rows of BaseA by the number of police officers per 10,000 inhabitants in ascending order.
+
+```{r project 26}
+BaseC<-BaseA[order(BaseA$`Taux pour mille habitants`),]
+```
+
+We then store in the variable `bottom30` the theft rate values corresponding to the 30 departments with the lowest number of police officers per 10,000 inhabitants.
+
+```{r project 27}
+bottom30 <-BaseC[1:30,7]
+```
+
+## 5.2 Variance Test
+
+We realize a variance test on the 2 data series
+
+```{r project 28}
+var.test(top30,bottom30,alternative="two.sided")
+```
+
+![](images/rmd3.png){width="445"}
+
+The critical probability of the variance test is equal to 0.001.
+We reject the hypothesis of equal variances.
+Therefore, we perform a one-sided comparison test with n=30 and var.equal=FALS since the variances are different.
+We aim to determine if the means of the `top30` and `bottom30` series are equal or not.
+
+$$\left\{\begin{array}{c}
+H_0: m_1 = m_2 \\
+H_1: m_1 \neq m_2 \end{array}
+\right.$$
+
+```{r project 29}
+t.test(top30, bottom30, alternative ="greater",var.equal=FALSE)
+```
+
+## ![](images/rmd4.png){width="455"}
+
+The critical probability of the test is 0.03.
+This value is lower than the usual thresholds of 5% and 10%.
+We reject the null hypothesis H0​ at the 5% and 10% thresholds and conclude that there is a difference in theft rates between departments with the most police officers and departments with the fewest police officers per 10,000 inhabitants in France in 2019.
+
+# 6. Chi-Square Test
+
+## 6.1. Definition of variables
+
+We begin by defining the TauxVols (theft rate) and TauxChômage (unemployment rate) variables.
+
+```{r project 30}
+TauxVols<-Vols$`Taux pour mille habitants` 
+TauxChômage<-Chomage$`Taux de chômage`
+```
+
+## 6.2. Discretization of variables
+
+These variables are continuous.
+To perform the Chi-Square test, we need to discretize these variables to obtain classes where all counts are greater than 4.
+
+```{r project 31}
+TxVols_bornes<-seq(0.2,6,1) 
+TxChômage_bornes<-seq(4,24,4) 
+TxVols_cut<-cut(TauxVols,TxVols_bornes) 
+TxChômage_cut<-cut(TauxChômage,TxChômage_bornes)
+```
+
+## 6.3. Empirical Contingency Table
+
+We create the empirical contingency table corresponding to these classes.
+
+```{r project 32}
+TC_emp<-table(TxChômage_cut,TxVols_cut) 
+addmargins(TC_emp)
+```
+
+We obtain the following table:
+
+![](images/rmd6.png){width="496"}
+
+To perform a Chi-Square test, the empirical counts of each class must be greater than 4.
+After conducting an initial Chi-Square test and checking with the line of code `chi2$expected`, we observe that this is not yet the case.
+Therefore, we need to proceed with class regroupings.
+
+## 6.4. Class Regroupings
+
+We start by regrouping the 4 classes with theft rates higher than 2.2 per 1000 inhabitants into a single class, named `(0.2, 1.2]`.
+
+```{r project 33}
+TxVols_cut2 <- factor(TxVols_cut,
+                      levels = c("(0.2,1.2]", "(1.2,2.2]", "(2.2,3.2]", "(3.2,4.2]", "(4.2,5.2]", "(5.2,6.2]"),                       
+                      labels = c("(0.2,1.2]", "(1.2,2.2]", "(2.2,6.2]", "(2.2,6.2]", "(2.2,6.2]", "(2.2,6.2]"))
+```
+
+Then, we group the 3 classes with over 12% unemployment rate into one.
+
+```{r project 34}
+TxChômage_cut2 <- factor(TxChômage_cut,                          
+                         levels = c("(4,8]", "(8,12]", "(12,16]", "(16,20]","(20,24]"),           
+                         labels = c("-8%", "8-12%", "+12%", "+12%","+12%"))
+```
+
+## 6.5. Row profile Table
+
+```{r project 35}
+TC_emp2<-table(TxChômage_cut2,TxVols_cut2) 
+TPL<-addmargins(prop.table(addmargins(TC_emp2,1,FUN=sum),1),2,FUN=sum)
+```
+
+![](images/rmd11.png){width="405"}
+
+## 6.6. Column profile Table
+
+```{r project 36}
+TPC<-addmargins(prop.table(addmargins(TC_emp2,2,FUN=sum),2),1,FUN=sum)
+```
+
+![](images/rmd12.png){width="401"}
+
+## 6.7. Chi-Square Independence Test
+
+Next, we perform a Chi-Square independence test on the theft rate and the unemployment rate.
+We do not apply continuity correction.
+
+```{r project 37}
+chi2bis<-chisq.test(TxVols_cut2,TxChômage_cut2,correct=FALSE)
+```
+
+![](images/rmd13.png){width="287"}
+
+We observe a very low critical probability.
+Therefore, we reject the hypothesis of independence at the 5% and 10% thresholds.
+This confirms our initial intuition that there is a relationship between vehicle thefts and the unemployment rate.
+
+![](images/rmd15.png){width="254"}
+
+According to this test, `chi2bis$expected`, our joint frequencies are all greater than 4, allowing us to use the Chi-Square distribution in the test.
+
+Finally, we make a last observation on the correlation coefficients linking the departmental vehicle theft rate to 3 of our main variables: the unemployment rate, the average income, and the number of police officers per 10,000 inhabitants in each department.
+
+## 6.8. Correlation Coefficients
+
+```{r project 38}
+cor(TauxVols,TauxChômage)  
+Revenu2<-Revenus$`Revenu moyen en euros` 
+vols19<-Vols19$`Taux pour mille habitants` 
+cor(vols19,Revenu2)  
+cor(vols19,Policiers$`Nombre de policiers pour 10000 habitants`)
+```
+
+![](images/rmd14.png){width="480"}
+
+We obtain 3 positive but relatively weak correlation coefficients.
+We conclude that there is a relatively weak correlation between each of these 3 variables and the departmental vehicle theft rate per 1000 inhabitants.
+
+\newpage
+
+# **Conclusion**
+
+\leavevmode\newline
+
+To conclude our study, it is difficult to assert a clear correlation between the different variables.
+
+Throughout this study, we have shown that at the departmental level, there is a link between the vehicle theft rate and average income, the number of police officers per inhabitant, and the unemployment rate.
+
+These observations have confirmed some of our initial hypotheses.
+The weak positive correlation between the unemployment rate and the theft rate can be explained by higher crime rates in the departments most affected by unemployment.
+In departments where the average income is higher, we can imagine that the opportunities for vehicle theft are more frequent or more lucrative, and that criminals may have more resources to carry out such crimes.
+
+However, our study also contradicted one of our assumptions.
+We were surprised by the positive correlation between the theft rate and the number of police officers.
+This may be explained by the need for a higher concentration of law enforcement in departments where crime is most prevalent.
